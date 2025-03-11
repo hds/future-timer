@@ -58,19 +58,19 @@
 //! [`async-timer`] crate instead.
 //!
 //! # Supported Rust Versions
-//! 
+//!
 //! `future-timer` is built against the latest stable release. The minimum supported version is
-//! 1.65. The current version of `future-timer` is not guaranteed to build on Rust versions earlier
+//! 1.70. The current version of `future-timer` is not guaranteed to build on Rust versions earlier
 //! than the minimum supported version.
-//! 
+//!
 //! # License
-//! 
+//!
 //! This project is licensed under the [MIT license].
-//! 
+//!
 //! [MIT license]: https://github.com/hds/future-timer/blob/main/LICENSE
-//! 
+//!
 //! ## Contribution
-//! 
+//!
 //! Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion
 //! in `future-timer` by you, shall be licensed as MIT, without any additional terms or conditions.
 //!

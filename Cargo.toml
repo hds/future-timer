@@ -3,7 +3,7 @@ name = "future-timer"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-rust-version = "1.65.0"
+rust-version = "1.70.0"
 authors = ["Hayden Stainsby <hds@caffeineconcepts.com>"]
 readme = "README.md"
 homepage = "https://github.com/hds/async-timing"
@@ -16,6 +16,13 @@ completion.
 """
 categories = ["development-tools::debugging", "development-tools::profiling"]
 keywords = ["debugging", "async"]
+
+[lints.clippy]
+cargo = "deny"
+complexity = "deny"
+pedantic = "deny"
+perf = "deny"
+style = "deny"
 
 [dependencies]
 pin-project-lite = "0.2"
