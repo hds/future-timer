@@ -18,22 +18,20 @@
 //! First, add this to your Cargo.toml `dependencies`:
 //!
 //! ```toml
-//! future-timer = "0.1"
+//! future-timing = "0.1"
 //! ```
 //!
 //! Record the timing of a future in the following manner.
 //!
 //! ```
-//! use future_timer::FutureTimer;
 //! # async fn some_async_fn() -> u64 {
 //! #   tokio::time::sleep(std::time::Duration::from_micros(10)).await;
 //! #   42
 //! # }
 //! # fn do_something_with_output(_: u64) {}
-//!
 //! # #[tokio::main]
 //! # async fn main() {
-//!     let output = FutureTimer::new(some_async_fn()).await;
+//!     let output = future_timing::timed(some_async_fn()).await;
 //!     let (timing, future_output) = output.into_parts();
 //!
 //!     do_something_with_output(future_output);
@@ -59,29 +57,26 @@
 //!
 //! # Supported Rust Versions
 //!
-//! `future-timer` is built against the latest stable release. The minimum supported version is
-//! 1.70. The current version of `future-timer` is not guaranteed to build on Rust versions earlier
+//! `future-timing` is built against the latest stable release. The minimum supported version is
+//! 1.70. The current version of `future-timing` is not guaranteed to build on Rust versions earlier
 //! than the minimum supported version.
 //!
 //! # License
 //!
 //! This project is licensed under the [MIT license].
 //!
-//! [MIT license]: https://github.com/hds/future-timer/blob/main/LICENSE
-//!
 //! ## Contribution
 //!
 //! Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion
-//! in `future-timer` by you, shall be licensed as MIT, without any additional terms or conditions.
+//! in `future-timing` by you, shall be licensed as MIT, without any additional terms or conditions.
 //!
 //! [`async-timer`]: https://docs.rs/async-timer/latest/async_timer/
-//! [`RuntimeMetrics`]: struct@tokio::runtime::RuntimeMetrics
+//! [`RuntimeMetrics`]: https://docs.rs/tokio/latest/tokio/runtime/struct.RuntimeMetrics.html
 //! [Tokio Console]: https://docs.rs/tokio-console/latest/tokio_console/
 //! [Tokio runtime]: https://docs.rs/tokio/latest/tokio/
+//! [MIT license]: https://github.com/hds/future-timing/blob/main/LICENSE
 use std::{
-    cmp, fmt,
     future::Future,
-    hash,
     pin::Pin,
     task::{Context, Poll},
     time::{Duration, Instant},
@@ -89,16 +84,47 @@ use std::{
 
 use pin_project_lite::pin_project;
 
+/// Instrument a future to record its timing
+///
+/// The busy and idle time for the future will be recorded separately in the result together with
+/// the output of the wrapped future. See the documentation for [`Timing`] for more details.
+///
+/// # Examples
+///
+/// ```
+/// # async fn some_async_fn() -> u64 {
+/// #   tokio::time::sleep(std::time::Duration::from_micros(10)).await;
+/// #   42
+/// # }
+/// # fn do_something_with_output(_: u64) {}
+/// # #[tokio::main]
+/// # async fn main() {
+///     let output = future_timing::timed(some_async_fn()).await;
+///     let (timing, future_output) = output.into_parts();
+///
+///     do_something_with_output(future_output);
+///
+///     assert!(!timing.idle().is_zero());
+///     assert!(!timing.busy().is_zero());
+/// # }
+pub fn timed<F>(fut: F) -> Timed<F>
+where
+    F: Future,
+{
+    Timed::new(fut)
+}
+
 pin_project! {
     /// Instrumentation to record the timing of a wrapped future.
     ///
-    /// The `FutureTimer` wraps any future and records the inner future's busy and idle time. The
+    /// The `Timed` wraps any future and records the inner future's busy and idle time. The
     /// timing is returned together with the inner future's output once it resolves ready.
     ///
     /// # Examples
     ///
+    /// To wrap a future, use the [`timed`] function.
+    ///
     /// ```
-    /// use future_timer::FutureTimer;
     /// # async fn some_async_fn() -> u64 {
     /// #   tokio::time::sleep(std::time::Duration::from_micros(10)).await;
     /// #   42
@@ -107,7 +133,7 @@ pin_project! {
     ///
     /// # #[tokio::main]
     /// # async fn main() {
-    ///     let output = FutureTimer::new(some_async_fn()).await;
+    ///     let output = future_timing::timed(some_async_fn()).await;
     ///     let (timing, future_output) = output.into_parts();
     ///
     ///     do_something_with_output(future_output);
@@ -116,8 +142,7 @@ pin_project! {
     ///     assert!(!timing.busy().is_zero());
     /// # }
     /// ```
-    #[derive(Debug)]
-    pub struct FutureTimer<F>
+    pub struct Timed<F>
     where
         F: Future,
     {
@@ -130,11 +155,11 @@ pin_project! {
     }
 }
 
-impl<F> FutureTimer<F>
+impl<F> Timed<F>
 where
     F: Future,
 {
-    pub fn new(inner: F) -> Self {
+    fn new(inner: F) -> Self {
         Self {
             last_poll_end: None,
             idle: Duration::ZERO,
@@ -145,13 +170,13 @@ where
     }
 }
 
-impl<F> Future for FutureTimer<F>
+impl<F> Future for Timed<F>
 where
     F: Future,
 {
-    type Output = FutureTimingOutput<F::Output>;
+    type Output = TimingOutput<F::Output>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<FutureTimingOutput<F::Output>> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<TimingOutput<F::Output>> {
         let start = Instant::now();
         let mut this = self.project();
         let result = this.inner.as_mut().poll(cx);
@@ -165,8 +190,8 @@ where
 
         match result {
             Poll::Pending => Poll::Pending,
-            Poll::Ready(output) => Poll::Ready(FutureTimingOutput {
-                timing: FutureTiming {
+            Poll::Ready(output) => Poll::Ready(TimingOutput {
+                timing: Timing {
                     idle: *this.idle,
                     busy: *this.busy,
                 },
@@ -176,29 +201,31 @@ where
     }
 }
 
-pub struct FutureTimingOutput<T> {
-    timing: FutureTiming,
+/// A wrapper around timing information for an instrumented future and that future's output.
+///
+/// See the documentation on [`Timing`] for further details.
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
+pub struct TimingOutput<T> {
+    timing: Timing,
     inner: T,
 }
 
-impl<T> FutureTimingOutput<T> {
+impl<T> TimingOutput<T> {
     /// Returns the timing of the future that was instrumented.
     ///
     /// # Examples
     ///
     /// ```
-    /// use future_timer::{FutureTimer, FutureTiming};
     /// # async fn some_async_fn() {}
-    ///
     /// # #[tokio::main]
     /// # async fn main() {
-    ///     let output = FutureTimer::new(some_async_fn()).await;
-    ///     let timing: FutureTiming = output.timing();
+    ///     let output = future_timing::timed(some_async_fn()).await;
+    ///     let timing: future_timing::Timing = output.timing();
     /// #   _ = timing
     /// # }
     /// ```
     #[must_use]
-    pub fn timing(&self) -> FutureTiming {
+    pub fn timing(&self) -> Timing {
         self.timing
     }
 
@@ -207,19 +234,17 @@ impl<T> FutureTimingOutput<T> {
     /// # Examples
     ///
     /// ```
-    /// use future_timer::FutureTimer;
     /// # async fn some_async_fn() {}
-    ///
     /// # #[tokio::main]
     /// # async fn main() {
-    ///     let output = FutureTimer::new(some_async_fn()).await;
+    ///     let output = future_timing::timed(some_async_fn()).await;
     ///     let (timing, future_output) = output.into_parts();
     /// #   _ = timing;
     /// #   _ = future_output;
     /// # }
     /// ```
     #[must_use]
-    pub fn into_parts(self) -> (FutureTiming, T) {
+    pub fn into_parts(self) -> (Timing, T) {
         (self.timing, self.inner)
     }
 
@@ -228,12 +253,10 @@ impl<T> FutureTimingOutput<T> {
     /// # Examples
     ///
     /// ```
-    /// use future_timer::{FutureTimer, FutureTiming};
     /// # async fn some_async_fn() {}
-    ///
     /// # #[tokio::main]
     /// # async fn main() {
-    ///     let output = FutureTimer::new(some_async_fn()).await;
+    ///     let output = future_timing::timed(some_async_fn()).await;
     ///     let future_output = output.into_inner();
     /// #   _ = future_output;
     /// # }
@@ -244,64 +267,31 @@ impl<T> FutureTimingOutput<T> {
     }
 }
 
-#[allow(clippy::expl_impl_clone_on_copy)]
-impl<T> Clone for FutureTimingOutput<T>
-where
-    T: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            timing: self.timing,
-            inner: self.inner.clone(),
-        }
-    }
-}
-
-impl<T> Copy for FutureTimingOutput<T> where T: Copy {}
-
-impl<T> fmt::Debug for FutureTimingOutput<T>
-where
-    T: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("FutureTimingOutput")
-            .field("timing", &self.timing)
-            .field("inner", &self.inner)
-            .finish()
-    }
-}
-
-impl<T> hash::Hash for FutureTimingOutput<T>
-where
-    T: hash::Hash,
-{
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.timing.hash(state);
-        self.inner.hash(state);
-    }
-}
-
-impl<T> cmp::PartialEq for FutureTimingOutput<T>
-where
-    T: cmp::PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.timing == other.timing && self.inner == other.inner
-    }
-}
-
 /// The timing information for an instrumented future.
 ///
-/// The busy time and the idle time of the instrumented future is available. The busy time will
-/// always be non-zero, but the idle time may be zero if the inner future returns
-/// [`Poll::Ready`] on the first poll (and so never returns [`Poll::Pending`]).
+/// The busy time and the idle time of the instrumented future is available.
+///
+/// ## Busy time
+///
+/// The busy time of a future is the sum of all the time consumed during calls to [`Future::poll`]
+/// on that future.
+///
+/// The busy time will always be non-zero.
+///
+/// ## Idle time
+///
+/// The idle time of a future is the sum of all the time between calls to [`Future::poll`]. The
+/// time before the first poll is not included.
+///
+/// The idle time may be zero if the inner future returns [`Poll::Ready`] on the first poll (and so
+/// never returns [`Poll::Pending`]).
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
-pub struct FutureTiming {
+pub struct Timing {
     idle: Duration,
     busy: Duration,
 }
 
-impl FutureTiming {
+impl Timing {
     /// The sum of all poll durations.
     ///
     /// This is the total time the future was polled across all polls.

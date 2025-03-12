@@ -6,6 +6,7 @@ on:
 name: CI
 
 env:
+  RUSTFLAGS: -Dwarnings
   # Disable incremental compilation.
   #
   # Incremental compilation is useful as part of an edit-build-test-edit cycle,
@@ -40,7 +41,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
       - name: Run cargo check
-        run: cargo check
+        run: cargo check --all --tests
 
   test_os:
     name: Tests on ${{ matrix.os }} with Rust ${{ matrix.rust }}
@@ -69,6 +70,21 @@ jobs:
 
       - name: Run cargo test
         run: cargo test
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run cargo check
+        run: cargo doc
 
   lints:
     name: Lints
