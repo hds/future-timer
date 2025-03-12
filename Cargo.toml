@@ -1,13 +1,13 @@
 [package]
-name = "future-timer"
+name = "future-timing"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 rust-version = "1.70.0"
 authors = ["Hayden Stainsby <hds@caffeineconcepts.com>"]
 readme = "README.md"
-homepage = "https://github.com/hds/async-timing"
-repository = "https://github.com/hds/async-timing"
+homepage = "https://github.com/hds/future-timing"
+repository = "https://github.com/hds/future-timing"
 description = """
 Future timing instrumentation.
 
@@ -15,7 +15,13 @@ Instrumentation to record the busy and idle time taken by a future as it is driv
 completion.
 """
 categories = ["development-tools::debugging", "development-tools::profiling"]
-keywords = ["debugging", "async"]
+keywords = ["debugging", "async", "timing"]
+
+[lints.rust]
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+rust_2018_idioms = "warn"
+unreachable_pub = "warn"
 
 [lints.clippy]
 cargo = "deny"
@@ -23,6 +29,9 @@ complexity = "deny"
 pedantic = "deny"
 perf = "deny"
 style = "deny"
+
+[lints.rustdoc]
+all = "deny"
 
 [dependencies]
 pin-project-lite = "0.2"

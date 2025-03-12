@@ -1,10 +1,15 @@
+//! Integration tests running on tokio runtime
+//!
+//! This crate isn't Tokio specific, and there's no reason why the timing functionality can't be
+//! used on a different runtime, but for the purpose of testing, this is the easiest way to get
+//! tests running.
 use std::time::Duration;
 
-use future_timer::FutureTimer;
+use future_timing::timed;
 
 #[tokio::test]
 async fn never_yield() {
-    let output = FutureTimer::new(async { 42 }).await;
+    let output = timed(async { 42 }).await;
     let timing = output.timing();
 
     assert!(timing.idle().is_zero());
@@ -14,7 +19,7 @@ async fn never_yield() {
 
 #[tokio::test]
 async fn short_async_sleep() {
-    let output = FutureTimer::new(async {
+    let output = timed(async {
         tokio::time::sleep(Duration::from_micros(10)).await;
         42
     })
@@ -28,7 +33,7 @@ async fn short_async_sleep() {
 
 #[tokio::test]
 async fn more_busy_time() {
-    let output = FutureTimer::new(async {
+    let output = timed(async {
         std::thread::sleep(Duration::from_micros(200));
 
         tokio::time::sleep(Duration::from_micros(10)).await;
