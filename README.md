@@ -54,7 +54,7 @@ resolves after a specific period of time, then you're in the wrong place. Have a
 # Supported Rust Versions
 
 `future-timer` is built against the latest stable release. The minimum supported version is
-1.65. The current version of `future-timer` is not guaranteed to build on Rust versions earlier
+1.70. The current version of `future-timer` is not guaranteed to build on Rust versions earlier
 than the minimum supported version.
 
 # License
